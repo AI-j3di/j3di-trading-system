@@ -1,0 +1,36 @@
+name: J3DI Deploy
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-demo:
+    runs-on: ubuntu-latest
+    environment: demo
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to demo path on VM
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VM_IP }}
+          username: ${{ secrets.VM_USER }}
+          password: ${{ secrets.VM_PASSWORD }}
+          script: |
+            cd C:\wvs\demo
+            git pull origin main
+
+  deploy-live:
+    runs-on: ubuntu-latest
+    environment: live          # requires manual approval
+    needs: deploy-demo
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to live path on VM
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VM_IP }}
+          username: ${{ secrets.VM_USER }}
+          password: ${{ secrets.VM_PASSWORD }}
+          script: |
+            cd C:\wvs\live
+            git pull origin main
