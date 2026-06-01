@@ -1,0 +1,18 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# WSL2 Configuration — Lenovo P16
+# Location: C:\Users\<YourUsername>\.wslconfig
+# Restart WSL after changes: wsl --shutdown
+# ══════════════════════════════════════════════════════════════════════════════
+
+[wsl2]
+memory=96GB              # 96 of 128 GB — leaves 32 GB for Windows + MT5
+processors=12            # Leave 4 cores for Windows
+swap=8GB
+localhostForwarding=true
+
+# GPU passthrough (enabled by default on Windows 11 with NVIDIA driver)
+# No additional config needed — WSL2 uses /dev/dxg for GPU access
+
+[experimental]
+autoMemoryReclaim=gradual    # Reclaim unused memory back to Windows
+sparseVhd=true               # Compact virtual disk automatically

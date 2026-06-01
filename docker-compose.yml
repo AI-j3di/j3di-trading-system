@@ -1,0 +1,197 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# J3DI Trading System — GPU Development Environment
+# Target: Lenovo P16 — RTX 3000 Ada 12 GB / 128 GB RAM / WSL2
+# docker compose up -d
+# ══════════════════════════════════════════════════════════════════════════════
+
+services:
+
+  # ── Core Dev Container (GPU + JupyterLab + all ML tools) ─────────────────
+  j3di-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: j3di-dev
+    ports:
+      - "8888:8888"     # JupyterLab
+      - "6006:6006"     # TensorBoard
+    volumes:
+      # Mount project code (live editing from Windows/WSL2)
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./notebooks:/app/notebooks
+      - ./tests:/app/tests
+      - ./scripts:/app/scripts
+      # Persistent data & model storage
+      - j3di-data:/app/data
+      - j3di-models:/app/models
+      - j3di-logs:/app/logs
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=j3di
+      - POSTGRES_USER=j3di
+      - POSTGRES_PASSWORD=j3di_dev_2026
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+    networks:
+      - j3di-net
+    restart: unless-stopped
+    # ── GPU access ───────────────────────────────────────────────────────
+    deploy:
+      resources:
+        limits:
+          memory: 48G        # P16 has 128 GB — leave room for OS + other services
+        reservations:
+          memory: 16G
+          devices:
+            - driver: nvidia
+              count: 1        # RTX 3000 Ada (single GPU)
+              capabilities: [gpu]
+    # Shared memory for PyTorch DataLoader workers
+    shm_size: "4g"
+
+  # ── Neural Network Training (dedicated GPU container, optional) ──────────
+  # Spin up a second container for long-running training jobs
+  # so JupyterLab stays responsive. Uses the SAME image.
+  j3di-train:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: j3di-train
+    profiles: ["training"]       # Only starts with: docker compose --profile training up -d
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./scripts:/app/scripts
+      - j3di-data:/app/data
+      - j3di-models:/app/models
+      - j3di-logs:/app/logs
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=j3di
+      - POSTGRES_USER=j3di
+      - POSTGRES_PASSWORD=j3di_dev_2026
+      - NVIDIA_VISIBLE_DEVICES=all
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - j3di-net
+    deploy:
+      resources:
+        limits:
+          memory: 64G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    shm_size: "8g"
+    # Override CMD — this container runs a training script, not Jupyter
+    command: ["bash", "-c", "echo 'Training container ready. Use: docker exec -it j3di-train python scripts/train.py' && sleep infinity"]
+
+  # ── MLflow Tracking Server ───────────────────────────────────────────────
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.14.0
+    container_name: j3di-mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow-data:/mlflow
+    environment:
+      - BACKEND_STORE_URI=postgresql://j3di:j3di_dev_2026@postgres:5432/mlflow
+      - DEFAULT_ARTIFACT_ROOT=/mlflow/artifacts
+    command: >-
+      bash -c "pip install --quiet psycopg2-binary &&
+      mlflow server
+        --backend-store-uri postgresql://j3di:j3di_dev_2026@postgres:5432/mlflow
+        --default-artifact-root /mlflow/artifacts
+        --host 0.0.0.0
+        --port 5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - j3di-net
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # ── PostgreSQL (MLflow + trade journal + backtest results) ────────────────
+  postgres:
+    image: postgres:16-bookworm
+    container_name: j3di-postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql
+    environment:
+      - POSTGRES_USER=j3di
+      - POSTGRES_PASSWORD=j3di_dev_2026
+      - POSTGRES_DB=j3di
+      # Tuned for 128 GB RAM host
+      - POSTGRES_SHARED_BUFFERS=2GB
+      - POSTGRES_EFFECTIVE_CACHE_SIZE=4GB
+      - POSTGRES_WORK_MEM=256MB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U j3di -d j3di"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - j3di-net
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  # ── Redis (market data cache, rate-limit tracking) ───────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: j3di-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --save 60 1 --loglevel warning --maxmemory 2gb --maxmemory-policy allkeys-lru
+    networks:
+      - j3di-net
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+# ── Named Volumes ──────────────────────────────────────────────────────────
+volumes:
+  j3di-data:
+    name: j3di-data
+  j3di-models:
+    name: j3di-models
+  j3di-logs:
+    name: j3di-logs
+  mlflow-data:
+    name: j3di-mlflow-data
+  postgres-data:
+    name: j3di-postgres-data
+  redis-data:
+    name: j3di-redis-data
+
+# ── Network ────────────────────────────────────────────────────────────────
+networks:
+  j3di-net:
+    name: j3di-network
+    driver: bridge

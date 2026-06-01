@@ -1,0 +1,55 @@
+# ── Git ───────────────────────────────────────────────────────────────────
+.git
+.gitignore
+
+# ── Python ───────────────────────────────────────────────────────────────
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.egg-info
+dist/
+build/
+
+# ── Virtual envs (host) ─────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.conda/
+
+# ── Data (mounted via volumes, not copied into image) ────────────────────
+data/
+*.csv
+*.parquet
+*.h5
+*.hdf5
+
+# ── Trained models (mounted via volumes) ─────────────────────────────────
+models/
+*.pt
+*.pth
+*.onnx
+*.tflite
+*.pkl
+
+# ── Logs ─────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── IDE ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# ── Docker ───────────────────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ── Docs & media ─────────────────────────────────────────────────────────
+docs/
+*.png
+*.jpg
+*.pdf
