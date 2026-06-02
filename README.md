@@ -1,8 +1,6 @@
  CI/CD pipeline test — Sprint 1
 Just Checking
 I am bored of this error
-# trigger
-# test
-# test
-# test
+Now this will work
+
 # test
