@@ -9,6 +9,7 @@ jobs:
     environment: demo
     steps:
       - uses: actions/checkout@v4
+
       - name: Debug secrets
         run: |
           echo "VM_IP is set: ${{ secrets.VM_IP != '' }}"
