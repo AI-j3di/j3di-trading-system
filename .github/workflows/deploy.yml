@@ -9,6 +9,12 @@ jobs:
     environment: demo
     steps:
       - uses: actions/checkout@v4
+      - name: Debug secrets
+        run: |
+          echo "VM_IP is set: ${{ secrets.VM_IP != '' }}"
+          echo "VM_USER is set: ${{ secrets.VM_USER != '' }}"
+          echo "VM_PASSWORD is set: ${{ secrets.VM_PASSWORD != '' }}"
+
       - name: Deploy to demo path on VM
         uses: appleboy/ssh-action@v1
         with:
